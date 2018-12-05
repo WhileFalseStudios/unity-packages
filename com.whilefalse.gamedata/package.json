@@ -1,0 +1,12 @@
+{
+    "name": "com.whilefalse.gamedata",
+    "displayName": "Game Data Management",
+    "version": "1.0.0",
+    "unity": "2018.3",
+    "description": "Core code features for WFS libraries",
+    "keywords": ["while false", "scenes", "data"],
+    "category": "Data Management",
+    "dependencies": {
+        "com.whilefalse.core": "1.0.0"
+    }
+}
