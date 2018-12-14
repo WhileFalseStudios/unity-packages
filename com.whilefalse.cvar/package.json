@@ -1,0 +1,12 @@
+{
+    "name": "com.whilefalse.cvar",
+    "displayName": "Console Variables",
+    "version": "1.0.0",
+    "unity": "2018.3",
+    "description": "Runtime-configurable console veriables",
+    "keywords": ["while false", "console", "variable"],
+    "category": "Data Management",
+    "dependencies": {
+        "com.whilefalse.core": "1.0.0"
+    }
+}
