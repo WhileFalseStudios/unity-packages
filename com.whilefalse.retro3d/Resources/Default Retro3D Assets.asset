@@ -1,0 +1,16 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9650444132ce43241926526e13fe31c6, type: 3}
+  m_Name: Default Retro3D Assets
+  m_EditorClassIdentifier: 
+  m_defaultShader: {fileID: 4800000, guid: a4e5bfa152526cb418bda8e2b507e4b3, type: 3}
+  m_defaultMaterial: {fileID: 2100000, guid: dfd896740155eec4eb017afaa0bf1eb3, type: 2}

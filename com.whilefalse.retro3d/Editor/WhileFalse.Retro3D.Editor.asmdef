@@ -1,0 +1,15 @@
+{
+    "name": "WhileFalse.Retro3D.Editor",
+    "references": [
+        "WhileFalse.Retro3D",
+        "WhileFalse.Core.Editor"
+    ],
+    "optionalUnityReferences": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": []
+}
