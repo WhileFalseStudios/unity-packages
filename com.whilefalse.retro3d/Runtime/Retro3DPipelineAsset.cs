@@ -57,6 +57,9 @@ namespace Retro3D
         [SerializeField] public bool m_simulateVertexPrecision;
         [SerializeField] public float m_vertexPrecision;
 
+        [Header("Viewmodel")]
+        [SerializeField] public float m_viewModelFOV = 40.0f;
+
         #endregion
 
         public override Shader GetDefaultShader()

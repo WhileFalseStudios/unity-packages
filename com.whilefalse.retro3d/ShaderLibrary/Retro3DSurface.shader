@@ -6,6 +6,7 @@
 		_Emissive ("Emissive Texture", 2D) = "black" {}
         _Color("Tint", Color) = (0.5, 0.5, 0.5)
 		_EmissiveColor("Emissive Tint", Color) = (1.0, 1.0, 1.0)
+        [Toggle(VIEWMODEL_ON)] _ViewModel("Viewmodel Rendered", Float) = 0
     }
 
     HLSLINCLUDE
@@ -47,17 +48,23 @@
     Varyings Vertex(Attributes input)
     { 
 		Varyings output;
-#ifdef VERTEX_PRECISION_ON
-		float3 vp = UnityObjectToViewPos(input.position.xyz);
+        float3 vp = UnityObjectToViewPos(input.position.xyz);
+        #ifdef VERTEX_PRECISION_ON
         vp = floor(vp * _VertexPrecision) / _VertexPrecision;
-		output.position = RETRO_View2Clip(vp);
-#else
-		output.position = RETRO_Obj2Clip(input.position.xyz);
-#endif                
+        #endif
+
+        #ifdef VIEWMODEL_ON
+        output.position = mul(_ViewmodelProjMatrix, float4(vp, 20));
+        #else
+        output.position = UnityViewToClipPos(vp);
+        #endif	
+
         output.texcoord = TRANSFORM_TEX(input.texcoord, _MainTex);
 		output.texcoord_lightmap = input.texcoord_lightmap.xy * unity_LightmapST.xy + unity_LightmapST.zw;
 		output.normal = normalize(UnityObjectToWorldNormal(input.position));
+        #ifndef VIEWMODEL_ON
         UNITY_TRANSFER_FOG(output, output.position);
+        #endif
         return output;
     }
 
@@ -88,7 +95,7 @@
         {
             Tags { "LightMode" = "Base" }
 			Fog { Mode Off }
-			Cull Off
+			Cull Back
             HLSLPROGRAM
 			#pragma multi_compile _ PERSPECTIVE_CORRECTION_ON
 			#pragma multi_compile _ VERTEX_PRECISION_ON
@@ -100,4 +107,6 @@
             ENDHLSL
         }
     }
+
+    CustomEditor "Retro3D_SurfaceEditor"
 }

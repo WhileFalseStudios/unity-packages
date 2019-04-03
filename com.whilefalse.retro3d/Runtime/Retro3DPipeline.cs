@@ -5,6 +5,9 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Experimental.Rendering;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace Retro3D
 {
@@ -79,6 +82,19 @@ namespace Retro3D
                 // Set the camera up.
                 context.SetupCameraProperties(camera);
 
+                float fov = _settings.m_viewModelFOV;
+                bool isSceneView = false;
+#if UNITY_EDITOR
+                if (SceneView.lastActiveSceneView.camera == camera)
+                {
+                    fov = camera.fieldOfView;
+                    isSceneView = true;
+                }
+#endif
+
+                var vm_matrix = Matrix4x4.Perspective(fov, camera.aspect, camera.nearClipPlane, camera.farClipPlane);
+                Shader.SetGlobalMatrix("_ViewmodelProjMatrix", GL.GetGPUProjectionMatrix(vm_matrix, _settings.m_fixedRenderResolution != RenderConstraintAxis.None || isSceneView));
+                
                 // Setup commands: Initialize the temporary render texture.
                 if (_settings.m_fixedRenderResolution != RenderConstraintAxis.None)
                 {
@@ -89,12 +105,18 @@ namespace Retro3D
                     context.ExecuteCommandBuffer(_cb);
                     _cb.Clear();
                 }
+                else
+                {
+                    _cb.ClearRenderTarget(true, true, Color.black);
+                    context.ExecuteCommandBuffer(_cb);
+                    _cb.Clear();
+                }
 
                 context.DrawSkybox(camera);
 
                 // Do basic culling.
                 var culled = new CullResults();
-                CullResults.Cull(camera, context, out culled);
+                CullResults.Cull(camera, context, out culled);                
 
                 // Render visible objects that has "Base" light mode tag.
                 var settings = new DrawRendererSettings(camera, new ShaderPassName("Base"));
@@ -102,12 +124,6 @@ namespace Retro3D
                 var filter = new FilterRenderersSettings(true);
                 filter.renderQueueRange = RenderQueueRange.all;
 
-                //filter.renderingLayerMask = 1 << 1;
-                //Shader.EnableKeyword("VIEWMODEL_ON");
-                //context.DrawRenderers(culled.visibleRenderers, ref settings, filter); //Draw viewmodels
-                //Shader.DisableKeyword("VIEWMODEL_ON");
-
-                //filter.renderingLayerMask = 1 << 0;
                 context.DrawRenderers(culled.visibleRenderers, ref settings, filter); //Draw normal scene
 
                 // Blit the render result to the camera destination.
