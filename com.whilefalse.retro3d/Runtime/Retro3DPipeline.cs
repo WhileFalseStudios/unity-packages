@@ -40,6 +40,8 @@ namespace Retro3D
         {
             base.Render(context, cameras);
 
+            BeginFrameRendering(cameras);
+
             // Lazy initialization of the temporary command buffer.
             if (_cb == null) _cb = new CommandBuffer();
 
@@ -79,6 +81,8 @@ namespace Retro3D
 
             foreach (var camera in cameras)
             {
+                BeginCameraRendering(camera);
+
                 // Set the camera up.
                 context.SetupCameraProperties(camera);
 
@@ -96,7 +100,7 @@ namespace Retro3D
                 Shader.SetGlobalMatrix("_ViewmodelProjMatrix", GL.GetGPUProjectionMatrix(vm_matrix, _settings.m_fixedRenderResolution != RenderConstraintAxis.None || isSceneView));
                 
                 // Setup commands: Initialize the temporary render texture.
-                if (_settings.m_fixedRenderResolution != RenderConstraintAxis.None)
+                if (_settings.m_fixedRenderResolution != RenderConstraintAxis.None && !isSceneView)
                 {
                     _cb.name = "Setup";
                     _cb.GetTemporaryRT(rtID, rtDesc);
@@ -120,7 +124,7 @@ namespace Retro3D
 
                 // Render visible objects that has "Base" light mode tag.
                 var settings = new DrawRendererSettings(camera, new ShaderPassName("Base"));
-                settings.rendererConfiguration = RendererConfiguration.PerObjectLightmaps | RendererConfiguration.PerObjectLightProbe;
+                settings.rendererConfiguration = RendererConfiguration.PerObjectLightmaps | RendererConfiguration.PerObjectLightProbe | RendererConfiguration.PerObjectReflectionProbes;
                 var filter = new FilterRenderersSettings(true);
                 filter.renderQueueRange = RenderQueueRange.all;
 
@@ -136,7 +140,7 @@ namespace Retro3D
                 _cb.Clear();
 
                 context.Submit();
-            }
+            }            
         }
     }
 }

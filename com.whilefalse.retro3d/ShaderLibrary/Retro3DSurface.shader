@@ -7,6 +7,7 @@
         _Color("Tint", Color) = (0.5, 0.5, 0.5)
 		_EmissiveColor("Emissive Tint", Color) = (1.0, 1.0, 1.0)
         [Toggle(VIEWMODEL_ON)] _ViewModel("Viewmodel Rendered", Float) = 0
+        [Toggle(REFLECTIONS_ON)] _Reflections("Reflections", Float) = 0
     }
 
     HLSLINCLUDE
@@ -26,14 +27,14 @@
     {
         float4 position : POSITION;
         float2 texcoord : TEXCOORD0;
-		//float3 normal : NORMAL;
 		float2 texcoord_lightmap : TEXCOORD1;
     };
 
     struct Varyings
     {
         float4 position : SV_POSITION;
-		float3 normal : NORMAL;
+		float3 normal : NORMAL0;
+        float3 viewDir : NORMAL1;
 
 #ifdef PERSPECTIVE_CORRECTION_ON
 		float2 texcoord : TEXCOORD0;
@@ -62,6 +63,7 @@
         output.texcoord = TRANSFORM_TEX(input.texcoord, _MainTex);
 		output.texcoord_lightmap = input.texcoord_lightmap.xy * unity_LightmapST.xy + unity_LightmapST.zw;
 		output.normal = normalize(UnityObjectToWorldNormal(input.position));
+        output.viewDir = WorldSpaceViewDir(input.position);
         #ifndef VIEWMODEL_ON
         UNITY_TRANSFER_FOG(output, output.position);
         #endif
@@ -79,6 +81,11 @@
 		c.rgb *= DecodeLightmap(UNITY_SAMPLE_TEX2D(unity_Lightmap, input.texcoord_lightmap)).rgb;
 #else
 		c.rgb *= ShadeSH9(float4(input.normal, 1));
+#endif
+
+#ifdef REFLECTIONS_ON
+        float3 reflDir = reflect(input.viewDir, input.normal);
+        c.rgb *= DecodeHDR(UNITY_SAMPLE_TEXCUBE(unity_SpecCube0, reflDir), unity_SpecCube0_HDR);
 #endif
 
 		c.rgb += tex2D(_Emissive, uv).rgb * _EmissiveColor;
@@ -101,6 +108,7 @@
 			#pragma multi_compile _ VERTEX_PRECISION_ON
 			#pragma multi_compile _ LIGHTMAP_ON
 			#pragma multi_compile _ VIEWMODEL_ON
+            #pragma multi_compile _ REFLECTIONS_ON
             #pragma multi_compile_fog
             #pragma vertex Vertex
             #pragma fragment Fragment
