@@ -1,12 +1,17 @@
 {
-    "name": "com.whilefalse.retro3d",
-    "displayName": "Retro3D Render Pipeline",
-    "version": "1.0.0",
-    "unity": "2018.3",
-    "description": "Improved Retro3DPipeline",
-    "keywords": ["while false", "srp", "retro"],
-    "category": "Render Pipeline",
-    "dependencies": {
-        "com.whilefalse.core": "1.0.0"
-    }
+  "name": "com.whilefalse.retro3d",
+  "displayName": "Retro3D Render Pipeline",
+  "version": "1.0.0",
+  "unity": "2018.3",
+  "description": "Improved Retro3DPipeline",
+  "keywords": [
+    "while false",
+    "srp",
+    "retro"
+  ],
+  "category": "Render Pipeline",
+  "dependencies": {
+    "com.whilefalse.core": "1.0.0",
+    "com.unity.shadergraph": "4.10.0"
+  }
 }

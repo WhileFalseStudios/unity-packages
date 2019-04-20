@@ -2,7 +2,11 @@
 // A minimal example of a custom render pipeline with the Retro3D shader.
 // https://github.com/keijiro/Retro3DPipeline
 
+#if UNITY_2019_1_OR_NEWER
+using UnityEngine.Rendering;
+#else
 using UnityEngine.Experimental.Rendering;
+#endif
 using UnityEngine;
 
 #if UNITY_EDITOR
@@ -56,13 +60,20 @@ namespace Retro3D
         [SerializeField] public bool m_perspectiveCorrection;
         [SerializeField] public bool m_simulateVertexPrecision;
         [SerializeField] public float m_vertexPrecision;
+        [SerializeField] public bool m_enableDynamicBatching;
 
         [Header("Viewmodel")]
         [SerializeField] public float m_viewModelFOV = 40.0f;
 
         #endregion
 
+#if UNITY_2019_1_OR_NEWER
+        public override Shader defaultShader => GetDefaultShader();
+
+        private Shader GetDefaultShader()
+#else
         public override Shader GetDefaultShader()
+#endif
         {
             if (k_PipelineAssets == null)
             {
@@ -79,7 +90,13 @@ namespace Retro3D
             }
         }
 
+#if UNITY_2019_1_OR_NEWER
+        public override Material defaultMaterial => GetDefaultMaterial();
+
+        private Material GetDefaultMaterial()
+#else
         public override Material GetDefaultMaterial()
+#endif
         {
             if (k_PipelineAssets == null)
             {
@@ -96,9 +113,16 @@ namespace Retro3D
             }
         }
 
+#if UNITY_2019_1_OR_NEWER
+        protected override RenderPipeline CreatePipeline()
+        {
+            return new Retro3DPipeline(this);
+        }
+#else
         protected override IRenderPipeline InternalCreatePipeline()
         {
             return new Retro3DPipeline(this);
         }
+#endif
     }
 }
