@@ -107,7 +107,7 @@ namespace Retro3D
                 float fov = _settings.m_viewModelFOV;
                 bool isSceneView = false;
 #if UNITY_EDITOR
-                if (SceneView.lastActiveSceneView?.camera == camera)
+                if (SceneView.currentDrawingSceneView?.camera == camera)
                 {
                     fov = camera.fieldOfView;
                     isSceneView = true;
@@ -150,6 +150,12 @@ namespace Retro3D
                     var filterSettings = new FilteringSettings(RenderQueueRange.all);
 
                     context.DrawRenderers(cullResults, ref drawSetting, ref filterSettings);
+                }
+
+                if (isSceneView)
+                {
+                    context.DrawGizmos(camera, GizmoSubset.PreImageEffects);
+                    context.DrawGizmos(camera, GizmoSubset.PostImageEffects); //FIXME: move this when postprocessing is in
                 }
 
 #else

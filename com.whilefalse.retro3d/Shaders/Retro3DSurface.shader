@@ -12,7 +12,7 @@
         [Toggle(REFLECTIONS_ON)] _Reflections("Reflections", Float) = 0
         _ReflTex("Reflection Specular Texture", 2D) = "white" {}
         _ReflColor("Reflection Specular Color", Color) = (1, 1, 1, 1)
-        _CullMode("Cull Mode", Int) = 1
+        _CullMode("Cull Mode", Int) = 2
         _SurfaceMode("Surface Mode", Int) = 0
     }
 
