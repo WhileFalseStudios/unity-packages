@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace WhileFalse.Cvar
 {
-    public abstract class ConBase
+    public abstract class ConBase : IComparable<ConBase>, IComparable
     {
         public string name { get; }
         public string helpString { get; }
@@ -59,5 +59,17 @@ namespace WhileFalse.Cvar
         public abstract string GetTypeString();
 
         public abstract string GetConfigString();
+        public int CompareTo(ConBase other)
+        {
+            return String.Compare(name, other.name, StringComparison.Ordinal);
+        }
+
+        public int CompareTo(object obj)
+        {
+            if (obj is ConBase other)
+                return CompareTo(other);
+            
+            return 0;
+        }
     }
 }

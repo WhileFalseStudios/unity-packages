@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace WhileFalse.Cvar
@@ -50,6 +51,23 @@ namespace WhileFalse.Cvar
                 return consoleItemMap[name] as T;
             }
             else return default;
+        }
+
+        public static List<ConBase> Search(string key)
+        {
+            if (string.IsNullOrEmpty(key))
+                return consoleItemMap.Values.ToList();
+            
+            List<ConBase> items = new List<ConBase>();
+            foreach (var c in consoleItemMap)
+            {
+                if (c.Key.Contains(key))
+                {
+                    items.Add(c.Value);
+                }
+            }
+
+            return items;
         }
     }
 }
