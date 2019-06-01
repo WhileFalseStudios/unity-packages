@@ -4,7 +4,7 @@ using UnityEditor;
 using UnityEngine;
 using WhileFalse.Core;
 
-namespace Retro3D
+namespace WhileFalse.Retro3D.Editor
 {
     public static class Retro3DStatics
     {

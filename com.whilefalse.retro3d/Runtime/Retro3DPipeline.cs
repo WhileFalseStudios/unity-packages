@@ -3,65 +3,55 @@
 // https://github.com/keijiro/Retro3DPipeline
 
 using UnityEngine;
-#if UNITY_2019_1_OR_NEWER
 using UnityEngine.Rendering;
-#else
-using UnityEngine.Experimental.Rendering;
-#endif
+using System.Collections.Generic;
+using System;
+using System.Linq;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
 
-namespace Retro3D
+namespace WhileFalse.Retro3D
 {
     // Render pipeline runtime class
     public class Retro3DPipeline : RenderPipeline
     {
-        // Temporary command buffer
-        // Reused between frames to avoid GC allocation.
-        // Rule: Clear commands right after calling ExecuteCommandBuffer.
-        CommandBuffer _cb;
         Retro3DPipelineAsset _settings;
+        Dictionary<Camera, VolumeStack> _volumeStacks;
+        SortedDictionary<int, PostProcessRenderer> _renderersSorted;
+
+        const int k_maxVisiblePixelLights = 4;
+        static int k_visibleLightColorsId = Shader.PropertyToID("_VisibleLightColors");
+        static int k_visibleLightDirectionsOrPositionsId = Shader.PropertyToID("_VisibleLightDirectionsOrPositions");
+        static int k_visibleLightAttenuationsId = Shader.PropertyToID("_VisibleLightAttenuations");
+        static int k_visibleLightSpotDirectionsId = Shader.PropertyToID("VisibleLightSpotDirections");
+        Vector4[] visibleLightDirectionsOrPositions = new Vector4[k_maxVisiblePixelLights];
+        Vector4[] visibleLightColors = new Vector4[k_maxVisiblePixelLights];
+        Vector4[] visibleLightAttenuations = new Vector4[k_maxVisiblePixelLights];
+        Vector4[] visibleLightSpotDirections = new Vector4[k_maxVisiblePixelLights];
 
         internal Retro3DPipeline(Retro3DPipelineAsset settings)
         {
+            _volumeStacks = new Dictionary<Camera, VolumeStack>();
             _settings = settings;
+            GraphicsSettings.lightsUseLinearIntensity = true;
         }
 
-#if UNITY_2019_1_OR_NEWER
         protected override void Dispose(bool disposing)
-#else
-        public override void Dispose()
-#endif
         {
-#if UNITY_2018
-            base.Dispose();
-#else
             base.Dispose(disposing);
-#endif
-
-            if (_cb != null)
-            {
-                _cb.Dispose();
-                _cb = null;
-            }
         }
 
-#if UNITY_2019_1_OR_NEWER
         protected override void Render(ScriptableRenderContext context, Camera[] cameras)
-#else
-        public override void Render(ScriptableRenderContext context, Camera[] cameras)
-#endif
         {
-#if !UNITY_2019_1_OR_NEWER
-
-            base.Render(context, cameras);
-#endif
-
             BeginFrameRendering(cameras);
 
-            // Lazy initialization of the temporary command buffer.
-            if (_cb == null) _cb = new CommandBuffer();
+            #region Rendering setup
+
+            if (_renderersSorted == null)
+            {
+                GetRenderersForEffects();
+            }
 
             // Constants used in the camera render loop.
             RenderTextureDescriptor rtDesc = new RenderTextureDescriptor(_settings.m_renderResolution.x, _settings.m_renderResolution.y, RenderTextureFormat.Default, 24);
@@ -73,6 +63,10 @@ namespace Retro3D
                     break;
                 case RenderConstraintAxis.Vertical:
                     rtDesc.width = (int)(((float)Screen.width / (float)Screen.height) * (float)rtDesc.height);
+                    break;
+                case RenderConstraintAxis.None:                    
+                    rtDesc.width = Screen.width;
+                    rtDesc.height = Screen.height;
                     break;
             }
 
@@ -97,9 +91,15 @@ namespace Retro3D
                 Shader.DisableKeyword("PERSPECTIVE_CORRECTION_ON");
             }
 
+            #endregion
+
             foreach (var camera in cameras)
             {
                 BeginCameraRendering(camera);
+
+                var _cb = CommandBufferPool.Get();
+
+                #region Per-camera setup
 
                 // Set the camera up.
                 context.SetupCameraProperties(camera);
@@ -107,87 +107,218 @@ namespace Retro3D
                 float fov = _settings.m_viewModelFOV;
                 bool isSceneView = false;
 #if UNITY_EDITOR
-                if (SceneView.currentDrawingSceneView?.camera == camera)
+                if (camera.cameraType == CameraType.SceneView)
                 {
                     fov = camera.fieldOfView;
                     isSceneView = true;
                 }
 #endif
+                _cb.SetGlobalVectorArray(k_visibleLightColorsId, visibleLightColors);
+                _cb.SetGlobalVectorArray(k_visibleLightDirectionsOrPositionsId, visibleLightDirectionsOrPositions);
+                _cb.SetGlobalVectorArray(k_visibleLightAttenuationsId, visibleLightAttenuations);
+                _cb.SetGlobalVectorArray(k_visibleLightSpotDirectionsId, visibleLightSpotDirections);
 
-                var vm_matrix = Matrix4x4.Perspective(fov, camera.aspect, camera.nearClipPlane, camera.farClipPlane);
-                Shader.SetGlobalMatrix("_ViewmodelProjMatrix", GL.GetGPUProjectionMatrix(vm_matrix, _settings.m_fixedRenderResolution != RenderConstraintAxis.None || isSceneView));
-                
-                // Setup commands: Initialize the temporary render texture.
-                if (_settings.m_fixedRenderResolution != RenderConstraintAxis.None && !isSceneView)
+                #region Volume stack setup
+
+                VolumeStack stack = null;
+
+                if (_volumeStacks.ContainsKey(camera))
                 {
-                    _cb.name = "Setup";
-                    _cb.GetTemporaryRT(rtID, rtDesc);
-                    _cb.SetRenderTarget(rtID);
-                    _cb.ClearRenderTarget(true, true, Color.black);
-                    context.ExecuteCommandBuffer(_cb);
-                    _cb.Clear();
+                    stack = _volumeStacks[camera];
                 }
                 else
                 {
-                    _cb.ClearRenderTarget(true, true, Color.black);
-                    context.ExecuteCommandBuffer(_cb);
-                    _cb.Clear();
+                    stack = VolumeManager.instance.CreateStack();
+                    _volumeStacks.Add(camera, stack);
                 }
 
-                context.DrawSkybox(camera);
+                var stackLayer = camera.GetComponent<Retro3DVolumeLayer>();
+                VolumeManager.instance.Update(stack, camera.transform, stackLayer ? stackLayer.layers : _settings.m_defaultVolumeLayerMask);
 
-#if UNITY_2019_1_OR_NEWER
+                #endregion
 
-                if (camera.TryGetCullingParameters(out var cullParms))
-                {
-                    CullingResults cullResults = context.Cull(ref cullParms);
+                var vm_matrix = Matrix4x4.Perspective(fov, camera.aspect, camera.nearClipPlane, camera.farClipPlane);
+                _cb.SetGlobalMatrix("_ViewmodelProjMatrix", GL.GetGPUProjectionMatrix(vm_matrix, true));
 
-                    var sorting = new SortingSettings(camera);
-                    var drawSetting = new DrawingSettings(new ShaderTagId("Base"), sorting);
-                    drawSetting.enableDynamicBatching = _settings.m_enableDynamicBatching;
-                    drawSetting.enableInstancing = true;
-                    drawSetting.perObjectData = PerObjectData.Lightmaps | PerObjectData.LightProbe | PerObjectData.ReflectionProbes;
-                    var filterSettings = new FilteringSettings(RenderQueueRange.all);
+                // Setup commands: Initialize the temporary render texture.
+                _cb.name = "Setup";
+                _cb.GetTemporaryRT(rtID, rtDesc.width, rtDesc.height, rtDesc.depthBufferBits, FilterMode.Point, rtDesc.colorFormat, RenderTextureReadWrite.Default, (int)_settings.m_antialiasing);
+                _cb.SetRenderTarget(rtID);
+                CoreUtils.ClearRenderTarget(_cb, ClearFlag.All, camera.backgroundColor);
+                context.ExecuteCommandBuffer(_cb);
+                _cb.Clear();
 
-                    context.DrawRenderers(cullResults, ref drawSetting, ref filterSettings);
-                }
+                #endregion
+
+                PerformSceneRender(context, camera);
 
                 if (isSceneView)
                 {
                     context.DrawGizmos(camera, GizmoSubset.PreImageEffects);
-                    context.DrawGizmos(camera, GizmoSubset.PostImageEffects); //FIXME: move this when postprocessing is in
                 }
 
-#else
-                // Do basic culling.
-                var culled = new CullResults();
-                CullResults.Cull(camera, context, out culled);                
+                PerformPostProcessing(context, camera, stack);
 
-                // Render visible objects that has "Base" light mode tag.
-                var settings = new DrawRendererSettings(camera, new ShaderPassName("Base"));
-                settings.rendererConfiguration = RendererConfiguration.PerObjectLightmaps | RendererConfiguration.PerObjectLightProbe | RendererConfiguration.PerObjectReflectionProbes;
-                var filter = new FilterRenderersSettings(true);
-                filter.renderQueueRange = RenderQueueRange.all;
-
-                context.DrawRenderers(culled.visibleRenderers, ref settings, filter); //Draw normal scene
-#endif
-
-
-                // Blit the render result to the camera destination.
-                if (_settings.m_fixedRenderResolution != RenderConstraintAxis.None)
+                if (isSceneView)
                 {
-                    _cb.name = "Blit";
-                    _cb.Blit(rtID, BuiltinRenderTextureType.CameraTarget);
-                    context.ExecuteCommandBuffer(_cb);
+                    context.DrawGizmos(camera, GizmoSubset.PostImageEffects);
                 }
-                _cb.Clear();
+
+                PerformFinalBlit(context, rtID, _cb);
 
                 context.Submit();
 
                 EndCameraRendering(context, camera);
+
+                CommandBufferPool.Release(_cb);
             }
 
             EndFrameRendering(context, cameras);        
+        }
+
+        private void PerformFinalBlit(ScriptableRenderContext context, int rtID, CommandBuffer _cb)
+        {
+            // Blit the render result to the camera destination.
+            _cb.name = "Blit";
+            _cb.Blit(rtID, BuiltinRenderTextureType.CameraTarget);
+            context.ExecuteCommandBuffer(_cb);
+            _cb.Clear();
+        }
+
+        private void PerformPostProcessing(ScriptableRenderContext context, Camera camera, VolumeStack stack)
+        {
+            if (CoreUtils.ArePostProcessesEnabled(camera))
+            {
+                foreach (var renderer in _renderersSorted)
+                {
+                    var renderObject = renderer.Value;
+                    renderObject.SetupStackComponent(stack);
+
+                    if (renderObject.ShouldRender())
+                    {
+                        CommandBuffer buf = CommandBufferPool.Get();
+                        renderObject.Render(buf, camera);
+                        context.ExecuteCommandBuffer(buf);
+                        CommandBufferPool.Release(buf);
+                    }
+                }
+            }
+        }
+
+        private void PerformSceneRender(ScriptableRenderContext context, Camera camera)
+        {            
+            if (camera.TryGetCullingParameters(out var cullParms))
+            {
+                //Setup
+#if UNITY_EDITOR
+                if (camera.cameraType == CameraType.SceneView)
+                {
+                    ScriptableRenderContext.EmitWorldGeometryForSceneView(camera);
+                }
+#endif
+                CullingResults cullResults = context.Cull(ref cullParms);
+                var sorting = new SortingSettings(camera);
+                sorting.criteria = SortingCriteria.CommonOpaque;
+                var drawSetting = new DrawingSettings(new ShaderTagId("Base"), sorting);
+                drawSetting.enableDynamicBatching = _settings.m_enableDynamicBatching;
+                drawSetting.enableInstancing = true;
+                drawSetting.perObjectData = PerObjectData.Lightmaps | PerObjectData.LightProbe | PerObjectData.ReflectionProbes | PerObjectData.LightIndices | PerObjectData.LightData;
+                var filterSettings = new FilteringSettings(RenderQueueRange.opaque);
+
+                ResolveLights(cullResults);
+
+                // Draw opaque
+                context.DrawRenderers(cullResults, ref drawSetting, ref filterSettings);
+
+                // Draw skybox (saves overdraw)
+                context.DrawSkybox(camera);
+
+                // Draw transparency
+                filterSettings.renderQueueRange = RenderQueueRange.transparent;
+                var ds = drawSetting.sortingSettings;
+                ds.criteria = SortingCriteria.CommonTransparent;
+                drawSetting.sortingSettings = ds;
+                context.DrawRenderers(cullResults, ref drawSetting, ref filterSettings);
+            }
+        }
+
+        private void ResolveLights(CullingResults cullResults)
+        {
+            for (int i = 0; i < cullResults.visibleLights.Length; i++)
+            {
+                if (i == k_maxVisiblePixelLights)
+                    break;
+
+                VisibleLight light = cullResults.visibleLights[i];
+                visibleLightColors[i] = light.finalColor;
+
+                Vector4 attenuation = Vector4.zero;
+                attenuation.w = 1;
+
+                if (light.lightType == LightType.Directional)
+                {
+                    Vector4 v = light.localToWorldMatrix.GetColumn(2);
+                    v.Scale(new Vector4(-1, -1, -1, 1));
+                    visibleLightDirectionsOrPositions[i] = v;
+                }
+                else
+                {
+                    visibleLightDirectionsOrPositions[i] = light.localToWorldMatrix.GetColumn(3);
+                    attenuation.x = 1f / Mathf.Max(light.range * light.range, 0.00001f);
+
+                    if (light.lightType == LightType.Spot)
+                    {
+                        float outerRad = Mathf.Deg2Rad * 0.5f * light.spotAngle;
+                        float outerCos = Mathf.Cos(outerRad);
+                        float outerTan = Mathf.Tan(outerRad);
+                        float innerCos = Mathf.Cos(Mathf.Atan((46f / 64f) * outerTan));
+                        float angleRange = Mathf.Max(innerCos - outerCos, 0.001f);
+                        attenuation.z = 1f / angleRange;
+                        attenuation.w = -outerCos * attenuation.z;
+
+                        Vector4 v = light.localToWorldMatrix.GetColumn(2);
+                        v.Scale(new Vector4(-1, -1, -1, 1));
+                        visibleLightSpotDirections[i] = v;
+                    }
+                }
+
+                visibleLightAttenuations[i] = attenuation;
+            }
+        }
+
+        private void GetRenderersForEffects()
+        {
+            if (_renderersSorted == null)
+            {
+                _renderersSorted = new SortedDictionary<int, PostProcessRenderer>();
+            }
+            else
+            {
+                _renderersSorted.Clear();
+            }
+
+            var types = from a in AppDomain.CurrentDomain.GetAssemblies()
+                        from t in a.GetTypes()
+                        let attributes = t.GetCustomAttributes(typeof(PostProcessLinkRendererAttribute), false)
+                        where attributes != null && attributes.Length > 0
+                        where !t.IsAssignableFrom(typeof(IInternalVolumeEffect))
+                        select new { Type = t, Attribute = attributes.Cast<PostProcessLinkRendererAttribute>().First() };            
+
+            foreach (var tDef in types)
+            {
+                var rendererInstance = Activator.CreateInstance(tDef.Attribute.rendererType) as PostProcessRenderer;
+                if (rendererInstance != null)
+                {
+                    _renderersSorted.Add(rendererInstance.priority, rendererInstance);
+#if UNITY_EDITOR
+                    Debug.Log($"Found renderer {rendererInstance.GetType().FullName} for {tDef.Type.FullName}");
+#endif
+                }
+                else
+                {
+                    Debug.LogError($"Renderer type linked in {tDef.Type.FullName} does not inherit from {typeof(PostProcessRenderer).FullName}");
+                }
+            }
         }
     }
 }

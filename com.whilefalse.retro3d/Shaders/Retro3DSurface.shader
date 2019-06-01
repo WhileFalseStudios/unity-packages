@@ -4,14 +4,14 @@
     {
         _MainTex("Texture", 2D) = "white" {}
         _MainTex_ST("Texture Offset", Vector) = (1, 1, 0, 0)
-		_Emissive ("Emissive Texture", 2D) = "black" {}
+		_Emissive ("Emissive Texture", 2D) = "white" {}
         _Color("Tint", Color) = (1, 1, 1)
-		_EmissiveColor("Emissive Tint", Color) = (1.0, 1.0, 1.0)
+		_EmissiveColor("Emissive Tint", Color) = (0.0, 0.0, 0.0)
         _AlphaClip("Clip Threshold", Float) = 0.5
         [Toggle(VIEWMODEL_ON)] _ViewModel("Viewmodel Rendered", Float) = 0
         [Toggle(REFLECTIONS_ON)] _Reflections("Reflections", Float) = 0
         _ReflTex("Reflection Specular Texture", 2D) = "white" {}
-        _ReflColor("Reflection Specular Color", Color) = (1, 1, 1, 1)
+        _ReflColor("Reflection Specular Color", Color) = (1, 1, 1, 0.5)
         _CullMode("Cull Mode", Int) = 2
         _SurfaceMode("Surface Mode", Int) = 0
     }
@@ -31,71 +31,81 @@
     sampler2D _ReflTex;
     #endif
 
-    UNITY_INSTANCING_BUFFER_START(UnityPerMaterial)
-           UNITY_DEFINE_INSTANCED_PROP(half3, _Color)
-           #if EMISSION_ON
-           UNITY_DEFINE_INSTANCED_PROP(half3, _EmissiveColor)
-           #endif
-           #if REFLECTIONS_ON
-            UNITY_DEFINE_INSTANCED_PROP(half3, _ReflColor)
-           #endif
-    UNITY_INSTANCING_BUFFER_END(UnityPerMaterial)
+    CBUFFER_START(UnityPerMaterial)
+		half4 _Color;
+		half4 _EmissiveColor;
+		half4 _ReflColor;
+    CBUFFER_END
 
-    Varyings Vertex(Attributes input)
-    { 
+	struct Attributes
+	{
+		float4 position : POSITION;
+		float2 texcoord : TEXCOORD0;
+		float2 texcoord_lightmap : TEXCOORD1;
+	};
+
+	struct Varyings
+	{
+		float4 position : SV_POSITION;		
+		float3 normal : NORMAL0;
+		float3 viewDir : NORMAL1;
+
+		PERSP_TEXCOORD texcoord : TEXCOORD0;
+		PERSP_TEXCOORD texcoord_lightmap : TEXCOORD1;
+
+		float3 worldPos : COLOR1;
+
+		UNITY_FOG_COORDS(2)
+	};
+
+	Varyings Vertex(Attributes input)
+	{
+		Retro3DVertex vertexData = RetroLitVertex(input.position);
+
 		Varyings output;
 
-        UNITY_SETUP_INSTANCE_ID(input);
-        UNITY_TRANSFER_INSTANCE_ID(output, input);
+		output.worldPos = mul(unity_ObjectToWorld, input.position).xyz;
 
-        float3 vp = UnityObjectToViewPos(input.position.xyz);
-        #ifdef VERTEX_PRECISION_ON
-        vp = floor(vp * _VertexPrecision) / _VertexPrecision;
-        #endif
-
-        #ifdef VIEWMODEL_ON
-        output.position = mul(_ViewmodelProjMatrix, float4(vp, 20));
-        #else
-        output.position = UnityViewToClipPos(vp);
-        #endif	
-
-        output.texcoord = TRANSFORM_TEX(input.texcoord, _MainTex);
+		output.texcoord = TRANSFORM_TEX(input.texcoord, _MainTex);
 		output.texcoord_lightmap = input.texcoord_lightmap.xy * unity_LightmapST.xy + unity_LightmapST.zw;
-		output.normal = normalize(UnityObjectToWorldNormal(input.position));
-        output.viewDir = WorldSpaceViewDir(input.position);
-        #ifndef VIEWMODEL_ON
-        UNITY_TRANSFER_FOG(output, output.position);
-        #endif
-        return output;
-    }
+		output.position = vertexData.position;
+		output.normal = vertexData.normal;
+		output.viewDir = vertexData.viewDir;
 
-    half4 Fragment(Varyings input) : SV_Target
-    {
-        UNITY_SETUP_INSTANCE_ID(input);
+#ifndef VIEWMODEL_ON
+		UNITY_TRANSFER_FOG(output, output.position);
+#endif
+		return output;
+	}
 
-        float2 uv = input.texcoord;
-        half4 c = tex2D(_MainTex, uv);
-        c.rgb *= UNITY_ACCESS_INSTANCED_PROP(UnityPerMaterial, _Color);
-#ifdef LIGHTMAP_ON
-		c.rgb *= DecodeLightmap(UNITY_SAMPLE_TEX2D(unity_Lightmap, input.texcoord_lightmap)).rgb;
-        #else
-		c.rgb *= ShadeSH9(float4(input.normal, 1));
-        #endif
+	half4 Fragment(Varyings input) : SV_Target
+	{
+		Retro3DSurface surface;
 
-        #ifdef REFLECTIONS_ON
-        float3 reflDir = reflect(input.viewDir, input.normal);
-        c.rgb *= DecodeHDR(UNITY_SAMPLE_TEXCUBE(unity_SpecCube0, reflDir), unity_SpecCube0_HDR);
-        #endif
-
-#if EMISSION_ON
-		c.rgb += tex2D(_Emissive, uv).rgb * UNITY_ACCESS_INSTANCED_PROP(UnityPerMaterial, _EmissiveColor);
+		float2 uv = input.texcoord;
+		surface.diffuse = tex2D(_MainTex, uv) * _Color;
+#ifdef EMISSION_ON
+		surface.emission = tex2D(_Emissive, uv) * _EmissiveColor;
+#else
+		surface.emission = float4(0, 0, 0, 1);
 #endif
 
-        #ifndef VIEWMODEL_ON
-        UNITY_APPLY_FOG(input.fogCoord, c);
-        #endif
-        return c;
-    }
+#ifdef REFLECTIONS_ON
+		float4 refl = tex2D(_ReflTex, uv) * _ReflColor;
+		surface.specular = refl;
+		surface.glossiness = refl.a;
+#else
+		surface.specular = float4(0, 0, 0, 1);
+		surface.glossiness = 0;
+#endif
+
+		half4 litSurfaceColor = RetroLitSurface(surface, input.texcoord_lightmap, input.normal, input.viewDir, input.worldPos);
+
+#ifndef VIEWMODEL_ON
+		UNITY_APPLY_FOG(input.fogCoord, litSurfaceColor);
+#endif
+		return litSurfaceColor;
+	}
 
     ENDHLSL
 
@@ -114,12 +124,11 @@
             #pragma multi_compile _ REFLECTIONS_ON
             #pragma multi_compile _ EMISSION_ON
             #pragma multi_compile_fog
-            #pragma multi_compile_instancing
             #pragma vertex Vertex
             #pragma fragment Fragment
             ENDHLSL
         }
     }
 
-    CustomEditor "Retro3D_SurfaceEditor"
+    CustomEditor "WhileFalse.Retro3D.Editor.Retro3D_SurfaceEditor"
 }

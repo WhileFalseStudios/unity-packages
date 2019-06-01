@@ -1,6 +1,8 @@
 {
     "name": "WhileFalse.Retro3D",
-    "references": [],
+    "references": [
+        "GUID:df380645f10b7bc4b97d4f5eb6303d95"
+    ],
     "optionalUnityReferences": [],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -8,5 +10,6 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": []
+    "defineConstraints": [],
+    "versionDefines": []
 }

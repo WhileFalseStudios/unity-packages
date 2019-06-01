@@ -5,3 +5,7 @@ using UnityEditor;
 using UnityEditor.ShaderGraph;
 using UnityEngine.Rendering;
 
+namespace WhileFalse.Retro3D.Editor
+{
+
+}

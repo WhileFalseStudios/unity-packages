@@ -14,7 +14,7 @@ using UnityEditor;
 using UnityEditor.ProjectWindowCallback;
 #endif
 
-namespace Retro3D
+namespace WhileFalse.Retro3D
 {
     public enum RenderConstraintAxis
     {
@@ -22,6 +22,14 @@ namespace Retro3D
         Vertical,
         Horizontal,
         Both
+    }
+
+    public enum AntiAliasing
+    {
+        None = 1,
+        MSAA2x = 2,
+        MSAA4x = 4,
+        MSAA8x = 8,
     }
 
     // Render pipeline asset for Retro3D
@@ -55,6 +63,7 @@ namespace Retro3D
         [Header("Internal Resolution")]
         [SerializeField] public RenderConstraintAxis m_fixedRenderResolution;
         [SerializeField] public Vector2Int m_renderResolution = new Vector2Int(320, 240);
+        [SerializeField] public AntiAliasing m_antialiasing = AntiAliasing.MSAA4x;
 
         [Header("Shader Features")]
         [SerializeField] public bool m_perspectiveCorrection;
@@ -65,15 +74,14 @@ namespace Retro3D
         [Header("Viewmodel")]
         [SerializeField] public float m_viewModelFOV = 40.0f;
 
+        [Header("Volumes/Post Processing")]
+        [SerializeField] public LayerMask m_defaultVolumeLayerMask;
+
         #endregion
 
-#if UNITY_2019_1_OR_NEWER
         public override Shader defaultShader => GetDefaultShader();
 
         private Shader GetDefaultShader()
-#else
-        public override Shader GetDefaultShader()
-#endif
         {
             if (k_PipelineAssets == null)
             {
@@ -90,13 +98,9 @@ namespace Retro3D
             }
         }
 
-#if UNITY_2019_1_OR_NEWER
         public override Material defaultMaterial => GetDefaultMaterial();
 
         private Material GetDefaultMaterial()
-#else
-        public override Material GetDefaultMaterial()
-#endif
         {
             if (k_PipelineAssets == null)
             {
@@ -113,16 +117,9 @@ namespace Retro3D
             }
         }
 
-#if UNITY_2019_1_OR_NEWER
         protected override RenderPipeline CreatePipeline()
         {
             return new Retro3DPipeline(this);
         }
-#else
-        protected override IRenderPipeline InternalCreatePipeline()
-        {
-            return new Retro3DPipeline(this);
-        }
-#endif
     }
 }
