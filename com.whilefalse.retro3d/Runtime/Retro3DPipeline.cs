@@ -3,8 +3,11 @@
 // https://github.com/keijiro/Retro3DPipeline
 
 using UnityEngine;
+#if UNITY_2019_1_OR_NEWER
 using UnityEngine.Rendering;
+#else
 using UnityEngine.Experimental.Rendering;
+#endif
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -25,9 +28,17 @@ namespace Retro3D
             _settings = settings;
         }
 
+#if UNITY_2019_1_OR_NEWER
+        protected override void Dispose(bool disposing)
+#else
         public override void Dispose()
+#endif
         {
+#if UNITY_2018
             base.Dispose();
+#else
+            base.Dispose(disposing);
+#endif
 
             if (_cb != null)
             {
@@ -36,9 +47,16 @@ namespace Retro3D
             }
         }
 
+#if UNITY_2019_1_OR_NEWER
+        protected override void Render(ScriptableRenderContext context, Camera[] cameras)
+#else
         public override void Render(ScriptableRenderContext context, Camera[] cameras)
+#endif
         {
+#if !UNITY_2019_1_OR_NEWER
+
             base.Render(context, cameras);
+#endif
 
             BeginFrameRendering(cameras);
 
@@ -89,7 +107,7 @@ namespace Retro3D
                 float fov = _settings.m_viewModelFOV;
                 bool isSceneView = false;
 #if UNITY_EDITOR
-                if (SceneView.lastActiveSceneView.camera == camera)
+                if (SceneView.currentDrawingSceneView?.camera == camera)
                 {
                     fov = camera.fieldOfView;
                     isSceneView = true;
@@ -118,6 +136,29 @@ namespace Retro3D
 
                 context.DrawSkybox(camera);
 
+#if UNITY_2019_1_OR_NEWER
+
+                if (camera.TryGetCullingParameters(out var cullParms))
+                {
+                    CullingResults cullResults = context.Cull(ref cullParms);
+
+                    var sorting = new SortingSettings(camera);
+                    var drawSetting = new DrawingSettings(new ShaderTagId("Base"), sorting);
+                    drawSetting.enableDynamicBatching = _settings.m_enableDynamicBatching;
+                    drawSetting.enableInstancing = true;
+                    drawSetting.perObjectData = PerObjectData.Lightmaps | PerObjectData.LightProbe | PerObjectData.ReflectionProbes;
+                    var filterSettings = new FilteringSettings(RenderQueueRange.all);
+
+                    context.DrawRenderers(cullResults, ref drawSetting, ref filterSettings);
+                }
+
+                if (isSceneView)
+                {
+                    context.DrawGizmos(camera, GizmoSubset.PreImageEffects);
+                    context.DrawGizmos(camera, GizmoSubset.PostImageEffects); //FIXME: move this when postprocessing is in
+                }
+
+#else
                 // Do basic culling.
                 var culled = new CullResults();
                 CullResults.Cull(camera, context, out culled);                
@@ -129,6 +170,8 @@ namespace Retro3D
                 filter.renderQueueRange = RenderQueueRange.all;
 
                 context.DrawRenderers(culled.visibleRenderers, ref settings, filter); //Draw normal scene
+#endif
+
 
                 // Blit the render result to the camera destination.
                 if (_settings.m_fixedRenderResolution != RenderConstraintAxis.None)
@@ -140,7 +183,11 @@ namespace Retro3D
                 _cb.Clear();
 
                 context.Submit();
-            }            
+
+                EndCameraRendering(context, camera);
+            }
+
+            EndFrameRendering(context, cameras);        
         }
     }
 }

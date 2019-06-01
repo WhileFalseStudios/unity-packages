@@ -10,9 +10,16 @@ These include:
 - Dynamic shading for non-lightmapped objects using Spherical Harmonics
 - Per-material cubemaps
 - Viewmodel rendering
-* More customisability, including:
+- More customisability, including:
     - Rendering resolution
     - Vertex precision simulation
     - Togglable perspective correction
+
+Upcoming features include:
+- ShaderGraph integration
+    - Refactor Retro3D surface shader into reusable hlsl modules
+    - Write subshader implementation for shadergraph (shader generator)
+    - Master node?
+- Instancing & SRP batcher support
 
 ![screenshot](Docs/Screenshot.jpg)
