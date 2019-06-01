@@ -73,24 +73,24 @@
     half4 Fragment(Varyings input) : SV_Target
     {
         float2 uv = input.texcoord;
-        //uv = floor(uv * 256) / 256;
         half4 c = tex2D(_MainTex, uv);
-        //c = floor(c * 8) / 8;
         c.rgb *= _Color * 2;
-#ifdef LIGHTMAP_ON
+        #ifdef LIGHTMAP_ON
 		c.rgb *= DecodeLightmap(UNITY_SAMPLE_TEX2D(unity_Lightmap, input.texcoord_lightmap)).rgb;
-#else
+        #else
 		c.rgb *= ShadeSH9(float4(input.normal, 1));
-#endif
+        #endif
 
-#ifdef REFLECTIONS_ON
+        #ifdef REFLECTIONS_ON
         float3 reflDir = reflect(input.viewDir, input.normal);
         c.rgb *= DecodeHDR(UNITY_SAMPLE_TEXCUBE(unity_SpecCube0, reflDir), unity_SpecCube0_HDR);
-#endif
+        #endif
 
 		c.rgb += tex2D(_Emissive, uv).rgb * _EmissiveColor;
 
+        #ifndef VIEWMODEL_ON
         UNITY_APPLY_FOG(input.fogCoord, c);
+        #endif
         return c;
     }
 
